@@ -6,31 +6,34 @@ require 'io/console'
 class ExpenseData
   def initialize
     @connection = PG.connect(dbname: "expenses")
+    setup_schema
   end
 
   def list_expenses
-    result = @connection.exec("SELECT * FROM expenses ORDER BY created_on ASC")
-    display_expenses(result)
+    result = @connection.exec("SELECT * FROM expenses ORDER BY created_on ASC;")
+    display_count(result)
+    display_expenses(result) if result.ntuples > 0
   end
 
   def add_expense(amount, memo)
     date = Date.today
-    sql = "INSERT INTO expenses (amount, memo, created_on) VALUES ($1, $2, $3)"
+    sql = "INSERT INTO expenses (amount, memo, created_on) VALUES ($1, $2, $3);"
     @connection.exec_params(sql, [amount, memo, date])
   end
 
   def search_expenses(query)
-    sql = "SELECT * FROM expenses WHERE memo ILIKE $1"
+    sql = "SELECT * FROM expenses WHERE memo ILIKE $1;"
     result = @connection.exec_params(sql, ["%#{query}%"])
-    display_expenses(result)
+    display_count(result)
+    display_expenses(result) if result.ntuples > 0
   end
 
   def delete_expense(id)
-    sql = "SELECT * FROM expenses WHERE id = $1"
+    sql = "SELECT * FROM expenses WHERE id = $1;"
     result = @connection.exec_params(sql, [id])
 
     if result.ntuples == 1
-      sql = "DELETE FROM expenses WHERE id = $1"
+      sql = "DELETE FROM expenses WHERE id = $1;"
       @connection.exec_params(sql, [id])
 
       puts "The following expense has been deleted"
@@ -40,8 +43,17 @@ class ExpenseData
     end
   end
 
+  def display_count(expenses)
+    count = expenses.ntuples
+    if count == 0
+      puts "There are no expenses"
+    else
+      puts "There are #{count} expense#{"s" if count != 1}."
+    end
+  end
+
   def delete_all_expenses
-    @connection.exec("DELETE FROM expenses")
+    @connection.exec("DELETE FROM expenses;")
     puts "All expenses have been deleted."
   end
 
@@ -54,6 +66,34 @@ class ExpenseData
                  tuple["amount"].rjust(12),
                  tuple["memo"]]
       puts columns.join(" | ")
+    end
+    display_total(expenses)
+  end
+
+  def display_total(expenses)
+    total = expenses.inject(0) do |sum, tuple|
+      sum + tuple["amount"].to_f
+    end
+    puts "-" * 50
+    puts "Total #{total.round(2).to_s.rjust(25)}"
+  end
+
+  def setup_schema
+    result = @connection.exec <<~SQL
+      SELECT COUNT(*) FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'expenses'
+    SQL
+
+    if result[0]["count"] == "0"
+      @connection.exec <<~SQL
+        CREATE TABLE expenses (
+          id serial PRIMARY KEY,
+          amount numeric(6, 2) NOT NULL,
+          memo text NOT NULL,
+          created_on date NOT NULL,
+          CONSTRAINT positive_amount CHECK (amount > 0)
+        );
+      SQL
     end
   end
 end
