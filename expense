@@ -47,8 +47,10 @@ class ExpenseData
     count = expenses.ntuples
     if count == 0
       puts "There are no expenses"
+    elsif count == 1
+      puts "There is #{count} expense"
     else
-      puts "There are #{count} expense#{"s" if count != 1}."
+      puts "There are #{count} expenses"
     end
   end
 
@@ -74,8 +76,9 @@ class ExpenseData
     total = expenses.inject(0) do |sum, tuple|
       sum + tuple["amount"].to_f
     end
+
     puts "-" * 50
-    puts "Total #{total.round(2).to_s.rjust(25)}"
+    puts "Total #{total.to_s.rjust(25)}"
   end
 
   def setup_schema
